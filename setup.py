@@ -20,8 +20,6 @@ long_description = ''
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt', session=False)
 
-# reqs is a list of requirement
-# e.g. ['django==1.5.1', 'mezzanine==1.4.6']
 try:
     reqs = [str(ir.req) for ir in install_reqs]
 except:
@@ -32,7 +30,7 @@ VERSION = os.getenv('PACKAGE_VERSION', 'v0.0.1')[1:]
 setup(
     name='aicovidvn',
     version=VERSION,
-    description='aicovidvn is a library for a problem.',
+    description='aicovidvn is a library for detect covid-19 from cough problem.',
     long_description=open("README.md", "r", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     url='',
