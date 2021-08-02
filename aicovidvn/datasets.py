@@ -1,17 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import os
-import re
-from numpy import lib
-from scipy.signal.spectral import spectrogram
-import torch
 import random
 import librosa
 import numpy as np
 import pandas as pd
 import librosa.display
 
-from tqdm import tqdm
 from typing import Any
 from torch.utils.data import Dataset
 
