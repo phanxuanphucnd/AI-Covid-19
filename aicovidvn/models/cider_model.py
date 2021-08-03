@@ -128,14 +128,28 @@ class ConvCore(nn.Module):
         return out
 
 
-class ConvModel(ConvCore):
-    def __init__(self, dropout=None, depth_scale=1, device="cuda", input_shape=(1025, 94), breathcough=False):
+class CIdeRModel(ConvCore):
+    def __init__(
+        self, 
+        dropout=None, 
+        depth_scale=1, 
+        input_shape=(1025, 94), 
+        breathcough=False, 
+        num_classes=2,
+        device="cuda"
+    ):
         super().__init__(dropout, depth_scale, breathcough=breathcough)
         self.to(device)
+        
+        if num_classes == 2:
+            output = 1
+        else:
+            output = num_classes
+
         out_tmp = super().forward(
             torch.randn(1, 2 if breathcough else 1, *input_shape).to(device))
         self.FC1 = nn.Linear(np.prod(out_tmp[-2:].shape), 50)
-        self.FC2 = nn.Linear(50,1)
+        self.FC2 = nn.Linear(50, output)
         self.relu = nn.ReLU()
         self.to(device)
         self.breathcough = breathcough
@@ -145,12 +159,5 @@ class ConvModel(ConvCore):
         out = self.FC1(out.view(x.size()[0], -1))
         out = self.relu(out)
         out = self.FC2(out)
+
         return out
-
-
-if __name__ == '__main__':
-    for i in range(1, 6):
-        x = torch.randn(8, 1, 1025, 94*i)
-        model = ConvModel(depth_scale=1.0, input_shape=x.shape[-2:], device='cpu')
-        out = model(x)
-    print('Done')
