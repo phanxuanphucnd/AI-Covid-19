@@ -7,8 +7,6 @@
     "nfft": 1024,
     "sr": 24000,
     "save_model_topk": 3,
-    "do_train": false,
-    "do_eval": true,
     "eval_type": "maj_vote",
     "noise": true,
     "masking": true,
