@@ -37,7 +37,7 @@ class CIdeRLeaner():
         self, 
         root: str='./data/aivncovid-19',
         window_size: int=8,
-        n_nfft: int=2048,
+        n_fft: int=2048,
         sample_rate: int=48000,
         masking: bool=True,
         pitch_shift: bool=True,
@@ -72,7 +72,7 @@ class CIdeRLeaner():
             transform=train_transform, 
             window_size=window_size,
             sample_rate=sample_rate,
-            n_fft=n_nfft,
+            n_fft=n_fft,
             masking=masking,
             pitch_shift=pitch_shift,
             breathcough=breathcough
@@ -84,7 +84,7 @@ class CIdeRLeaner():
             transform=train_transform, 
             window_size=window_size,
             sample_rate=sample_rate,
-            n_fft=n_nfft,
+            n_fft=n_fft,
             masking=masking,
             pitch_shift=pitch_shift,
             breathcough=breathcough
