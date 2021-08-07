@@ -89,7 +89,7 @@ class AICovidVNDataset(Dataset):
 
     def pad(self, signal):
         sample_signal = np.zeros((self.window_size,))
-        sample_signal[:signal.shape[0],] = signal
+        sample_signal[:signal.shape[0], ] = signal
 
         return sample_signal
 
@@ -97,9 +97,7 @@ class AICovidVNDataset(Dataset):
         # TODO: Get path of chosen index
         audio_path = self.data_df['path'].iloc[index]
         label = self.data_df['label'].iloc[index]
-
         chunks = self.load_process(audio_path)
-
 
         return chunks, label
 
