@@ -5,6 +5,8 @@ import json
 import torch
 import matplotlib.pyplot as plt
 
+from torchvision.transforms.functional import to_tensor
+
 def load_json(file: str=None):
     """
     Function load a json file.
@@ -36,6 +38,30 @@ class AddGaussianNoise(object):
             self.mean, self.std
         )
 
+class ToFloatTensor(object):
+    """Convert a ``PIL Image`` or ``numpy.ndarray`` to tensor.
+
+    Converts a PIL Image or numpy.ndarray (H x W x C) in the range
+    [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0]
+    if the PIL Image belongs to one of the modes (L, LA, P, I, F, RGB, YCbCr, RGBA, CMYK, 1)
+    or if the numpy.ndarray has dtype = np.uint8
+
+    In the other cases, tensors are returned without scaling.
+    """
+
+    def __call__(self, pic):
+        """
+        Args:
+            pic (PIL Image or numpy.ndarray): Image to be converted to tensor.
+
+        Returns:
+            Tensor: Converted image.
+        """
+        return to_tensor(pic).type(torch.FloatTensor)
+
+    def __repr__(self):
+        return self.__class__.__name__ + '()'
+
 class NoneTransform(object):
     def __call__(self, x):
         return x
@@ -51,3 +77,8 @@ def plot_roc_auc(fpr, tpr, roc_auc):
     plt.ylabel('True Positive Rate')
     plt.title('Receiver operating characteristic example')
     plt.legend(loc="lower right")
+
+def print_free_style(message, print_fun=print):
+    print_fun("")
+    print_fun("⫸  {} ".format(message))
+    print_fun("")
