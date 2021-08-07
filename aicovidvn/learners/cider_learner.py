@@ -14,8 +14,8 @@ from sklearn.metrics import f1_score, accuracy_score, roc_curve, auc, recall_sco
 
 from aicovidvn.datasets import AICovidVNDataset
 from aicovidvn.models.cider_model import CIdeRModel
-from aicovidvn.utils import load_json, plot_roc_auc
-from aicovidvn.utils import AddGaussianNoise, NoneTransform
+from aicovidvn.utils import load_json, plot_roc_auc, print_free_style
+from aicovidvn.utils import ToFloatTensor, AddGaussianNoise, NoneTransform
 
 class CIdeRLeaner():
     def __init__(
@@ -32,7 +32,7 @@ class CIdeRLeaner():
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = device
-        
+
     def train(
         self, 
         root: str='./data/aivncovid-19',
@@ -52,23 +52,21 @@ class CIdeRLeaner():
         view_model: bool=True,
         save_dir: str='./models',
         model_name: str='aivncovid',
-        default_config_path: str='configs/default.json',
         **kwargs
     ):
         train_transform = transforms.Compose([
-            transforms.ToTensor(),
+            ToFloatTensor(),
             AddGaussianNoise() if noise else NoneTransform(),
             # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         ])
-        test_transform = transforms.Compose([
-            transforms.ToTensor(),
+        valid_transform = transforms.Compose([
+            ToFloatTensor(),
             # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         ])
         # TODO: Create Dataset
         train_dataset = AICovidVNDataset(
             root=root, 
             mode='train',
-            eval_type=eval_type, 
             transform=train_transform, 
             window_size=window_size,
             sample_rate=sample_rate,
@@ -81,15 +79,14 @@ class CIdeRLeaner():
             root=root, 
             mode='valid',
             eval_type=eval_type, 
-            transform=train_transform, 
-            window_size=window_size,
+            transform=valid_transform, 
             sample_rate=sample_rate,
+            window_size=window_size,
             n_fft=n_fft,
-            masking=masking,
-            pitch_shift=pitch_shift,
             breathcough=breathcough
         )
-
+        
+        print_free_style(message="Dataset Info")
         print(f"Length of Training dataset: {len(train_dataset)}")
         print(f"Length of Valid dataset: {len(valid_dataset)}")
 
@@ -105,15 +102,15 @@ class CIdeRLeaner():
         valid_dataloader = DataLoader(
             valid_dataset, 
             batch_size=batch_size if eval_type != 'maj_vote' else 1, 
-            shuffle=False,
+            shuffle=shuffle,
             num_workers=num_workers
         )
         optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        print(f"Total number of parameters is: {params}")
 
         if view_model:
-            print(f"Model Info: ")
+            print_free_style(message="Model Info")
+            print(f"Total number of parameters is: {params} \n")
             print(self.model)
 
         best_score = 0
@@ -122,9 +119,14 @@ class CIdeRLeaner():
             self._train(epoch, train_dataloader, optimizer, train_weight)
             f1_score, acc, recall, roc_auc = self.validate(epoch, valid_dataloader, valid_weight, eval_type)
 
+            print_free_style(
+                message=f"Epoch {epoch + 1}/{n_epochs} Valid Evaluation: \n"
+                        f"\tF1-score = {f1_score:.4f} | Acc = {acc:.4f} | Recall = {recall:.4f} | AUC = {roc_auc} \n"
+            )
+
             # TODO: Save model
-            if f1_score > best_score:
-                best_score = f1_score
+            if roc_auc > best_score:
+                best_score = roc_auc
                 self.save_model(self.model, save_dir, model_name)
                 print(f"Saved the best model !")
 
@@ -168,12 +170,12 @@ class CIdeRLeaner():
             # TODO: Get Accuracy
             logits = torch.sigmoid(output.detach())
             preds = np.where(logits.cpu().numpy()>0.5, 1, 0)
-            score = f1_score(label.cpu().numpy(), preds)
+            acc = accuracy_score(label.cpu().numpy(), preds)
 
             optimizer.step()
             lr = optimizer.param_groups[0]['lr']
             train_dataloader.set_description(
-                (f'Epoch: {epoch + 1}; F1: {score:.5f}; Loss: {loss.item():.4f}')
+                (f'Epoch {epoch + 1}: Loss = {loss.item():.4f} | Acc = {acc:.4f}')
             )
 
     def _eval(self, audio, label, criterion):
@@ -209,7 +211,7 @@ class CIdeRLeaner():
 
             for i, (audio, label) in enumerate(valid_dataloader):
                 label = label.to(self.device)
-                if eval_type == 'maj_vote':
+                if eval_type != 'maj_vote':
                     loss, preds, _ = self._eval(audio, label, criterion)
                 else:
                     clips = audio
@@ -232,7 +234,7 @@ class CIdeRLeaner():
                         )
                         preds = np.argmax(logits).reshape(1, 1)
                     else:
-                        preds = np.array(int(max(votes.items(), key=lambda x: x[1])[0])).reshape(1,1)
+                        preds = np.array(int(max(votes.items(), key=lambda x: x[1])[0])).reshape(1, 1)
 
                 # For ROC-AUC
                 average_logits = [c[1][0][0] for c in clip_preds]
@@ -255,7 +257,7 @@ class CIdeRLeaner():
             plot_roc_auc(fpr, tpr, roc_auc)
 
             valid_dataloader.set_description((
-                f'Epoch: {epoch + 1}; Test-F1: {score:.5f}; Test-AUC {roc_auc:.5f}'
+                f'Epoch {epoch + 1}: Test-F1: {score:.4f}; Test-AUC {roc_auc:.4f}'
                 f'Test-Loss: {sum(losses)/len(losses):.4f}'
             ))
 

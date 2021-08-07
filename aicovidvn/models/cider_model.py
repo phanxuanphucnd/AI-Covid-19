@@ -141,6 +141,7 @@ class CIdeRModel(ConvCore):
         super().__init__(dropout, depth_scale, breathcough=breathcough)
         self.to(device)
         
+        self.num_classes = num_classes
         if num_classes == 2:
             output = 1
         else:
@@ -149,8 +150,8 @@ class CIdeRModel(ConvCore):
         out_tmp = super().forward(
             torch.randn(1, 2 if breathcough else 1, *input_shape).to(device))
         self.FC1 = nn.Linear(np.prod(out_tmp[-2:].shape), 50)
-        self.FC2 = nn.Linear(50, output)
         self.relu = nn.ReLU()
+        self.FC2 = nn.Linear(50, output)
         self.to(device)
         self.breathcough = breathcough
 

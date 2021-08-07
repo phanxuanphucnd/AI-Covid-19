@@ -13,9 +13,7 @@ def train():
         input_shape=(int(1024 * n_fft / 2048), int(94 * window_size * sample_rate / 48000))
     )
 
-    learner = CIdeRLeaner(
-        model=model
-    )
+    learner = CIdeRLeaner(model=model)
     learner.train(
         root='./data/aivncovid-19',
         window_size=window_size, 
@@ -24,11 +22,14 @@ def train():
         masking=True,
         pitch_shift=True,
         eval_type='maj_vote', 
+        num_workers=4,
         noise=True,
-        batch_size=48,
+        batch_size=16,
         learning_rate=0.0001,
-        n_epochs=100,
+        n_epochs=50,
         shuffle=True, 
         save_dir='./models', 
-        model_name='aicovidbn'
+        model_name='aicovidvn'
     )
+
+train()

@@ -28,11 +28,9 @@ class AICovidVNDataset(Dataset):
     ) -> None:
         super(AICovidVNDataset, self).__init__()
 
-        self.data_df = pd.read_csv(os.path.join(root, 'data.csv'))
-        
-        self.mode = mode
         self.root = root
-        self.window_size = window_size
+        self.mode = mode
+        self.window_size = window_size * sample_rate
         self.sample_rate = sample_rate
         self.hop_length = hop_length
         self.n_fft = n_fft
@@ -41,19 +39,23 @@ class AICovidVNDataset(Dataset):
         self.masking = masking
         self.pitch_shift = pitch_shift
         self.breathcough = breathcough
+        self.data_df = pd.read_csv(os.path.join(root, f'{mode}.csv'))
+        print(f"Root data dir: {os.path.abspath(self.root)}")
 
     def __len__(self):
         return len(self.data_df.index)
 
     def custom_transform(self, signal):
         """
-        Create log spectrograph of signal
+        create log spectrograph of signal
         """
         stft = librosa.stft(signal, n_fft=self.n_fft, hop_length=self.hop_length)
         spectrogram = np.abs(stft)
         log_spectrogram = librosa.amplitude_to_db(spectrogram)
+        
         if self.masking:
             log_spectrogram = self.spec_augment(log_spectrogram)
+        
         if self.transform:
             log_spectrogram = self.transform(log_spectrogram)
 
@@ -86,17 +88,18 @@ class AICovidVNDataset(Dataset):
         return spec
 
     def pad(self, signal):
-        sample_signal = np.zeros((self.window_size, ))
-        sample_signal[:signal.shape[0], ] = signal
+        sample_signal = np.zeros((self.window_size,))
+        sample_signal[:signal.shape[0],] = signal
 
         return sample_signal
 
     def __getitem__(self, index):
         # TODO: Get path of chosen index
-        audio_path = self.data_df['path'].iloc(index)
-        label = self.data_df['label'].iloc(index)
+        audio_path = self.data_df['path'].iloc[index]
+        label = self.data_df['label'].iloc[index]
 
         chunks = self.load_process(audio_path)
+
 
         return chunks, label
 
@@ -110,7 +113,7 @@ class AICovidVNDataset(Dataset):
             signal = librosa.effects.pitch_shift(signal, sample_rate, step)
 
         # For `train`, sample random window size from audiofile
-        if self.mode.lower() == 'train  ' or self.eval_type != 'maj_vote':
+        if self.mode.lower() == 'train' or self.eval_type != 'maj_vote':
             # TODO: Apply padding if necessary, else samples window size
             if signal.shape[0] <= self.window_size:
                 sample_signal = self.pad(signal)
@@ -125,9 +128,11 @@ class AICovidVNDataset(Dataset):
             sample_signal = self.custom_transform(sample_signal)
 
             return sample_signal
+            
         # For `eval/ test`, chunk audiofile into chunks of size wsz and process and return all
         else:
             chunks = np.array_split(signal, int(np.ceil(signal.shape[0] / self.window_size)))
+            
             def process_chunk(chunk):
                 if chunk.shape[0] <= self.window_size:
                     sample_signal = self.pad(chunk)
