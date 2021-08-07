@@ -96,10 +96,14 @@ class AICovidVNDataset(Dataset):
     def __getitem__(self, index):
         # TODO: Get path of chosen index
         audio_path = self.data_df['path'].iloc[index]
-        label = self.data_df['label'].iloc[index]
+        if self.mode.lower() != 'inference':
+            label = self.data_df['label'].iloc[index]
+        else:
+            label = 0
+            
         chunks = self.load_process(audio_path)
 
-        return chunks, label
+        return audio_path, chunks, label
 
     def load_process(self, audio_path):
         # TODO: Load the data

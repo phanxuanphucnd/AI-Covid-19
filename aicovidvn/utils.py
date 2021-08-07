@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2021 by Phuc Phan
 
+import os
 import json
 import torch
 import matplotlib.pyplot as plt
@@ -21,6 +22,13 @@ def load_json(file: str=None):
         data = json.load(json_file)
 
     return data
+
+def save_json(save_dir: str='./output', file: str='configs.json', var: dict=None):
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    with open(os.path.join(save_dir, file), 'w') as f:
+        json.dump(var, f, indent=4)
 
 class AddGaussianNoise(object):
     def __init__(self, mean: int=0, std: float=5.) -> None:

@@ -1,0 +1,13 @@
+{
+    "learning_rate": 0.0001,
+    "batch_size": 16,
+    "window_size": 8,
+    "n_fft": 1024,
+    "sample_rate": 24000,
+    "eval_type": "maj_vote",
+    "noise": true,
+    "masking": true,
+    "pitch_shift": true,
+    "breathcough": false,
+    "num_workers": 4
+}

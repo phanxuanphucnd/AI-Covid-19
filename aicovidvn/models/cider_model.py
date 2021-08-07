@@ -140,7 +140,7 @@ class CIdeRModel(ConvCore):
     ):
         super().__init__(dropout, depth_scale, breathcough=breathcough)
         self.to(device)
-        
+
         self.num_classes = num_classes
         if num_classes == 2:
             output = 1

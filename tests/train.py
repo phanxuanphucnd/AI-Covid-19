@@ -26,7 +26,7 @@ def train():
         noise=True,
         batch_size=16,
         learning_rate=0.0001,
-        n_epochs=50,
+        n_epochs=100,
         shuffle=True, 
         save_dir='./models', 
         model_name='aicovidvn'

@@ -2,20 +2,23 @@
 # Copyright (c) 2021 by Phuc Phan
 
 import os
-import re
 import torch
 import numpy as np
+import pandas as pd
 import torch.nn as nn
 
 from tqdm import tqdm
+from typing import Union
+from shutil import copyfile
+from pandas import DataFrame
 from torchvision import transforms
 from torch.utils.data import DataLoader, random_split
 from sklearn.metrics import f1_score, accuracy_score, roc_curve, auc, recall_score
 
 from aicovidvn.datasets import AICovidVNDataset
 from aicovidvn.models.cider_model import CIdeRModel
-from aicovidvn.utils import load_json, plot_roc_auc, print_free_style
 from aicovidvn.utils import ToFloatTensor, AddGaussianNoise, NoneTransform
+from aicovidvn.utils import load_json, plot_roc_auc, print_free_style, save_json
 
 class CIdeRLeaner():
     def __init__(
@@ -115,6 +118,21 @@ class CIdeRLeaner():
 
         best_score = 0
 
+        configs = {}
+        configs['learning_rate'] = learning_rate
+        configs['batch_size'] = batch_size
+        configs['window_size'] = window_size
+        configs['n_fft'] = n_fft
+        configs['sample_rate'] = sample_rate
+        configs['eval_type'] = eval_type
+        configs['noise'] = noise
+        configs['masking'] = masking
+        configs['pitch_shift'] = pitch_shift
+        configs['breathcough'] = breathcough
+        configs['num_workers'] = num_workers
+
+        save_json(save_dir='./configs', file='params.json', var=configs)
+
         for epoch in range(n_epochs):
             self._train(epoch, train_dataloader, optimizer, train_weight)
             f1_score, acc, recall, roc_auc = self.validate(epoch, valid_dataloader, valid_weight, eval_type)
@@ -157,7 +175,7 @@ class CIdeRLeaner():
         train_dataloader = tqdm(train_dataloader, position=0)
         criterion = nn.BCEWithLogitsLoss(pos_weight=train_weight)
 
-        for i, (audio, label) in enumerate(train_dataloader):
+        for i, (path, audio, label) in enumerate(train_dataloader):
             self.model.zero_grad()
             
             audio = audio.to(self.device)
@@ -178,12 +196,14 @@ class CIdeRLeaner():
                 (f'Epoch {epoch + 1}: Loss = {loss.item():.4f} | Acc = {acc:.4f}')
             )
 
-    def _eval(self, audio, label, criterion):
+    def _eval(self, audio, label, criterion=None):
         audio = audio.to(self.device)
         label = label.to(self.device)
 
         output = self.model(audio)
-        loss = criterion(output, label.unsqueeze(1).float())
+        loss = None
+        if criterion:
+            loss = criterion(output, label.unsqueeze(1).float())
 
         # TODO: Get Accuracy
         logits = torch.sigmoid(output).cpu().numpy()
@@ -209,7 +229,7 @@ class CIdeRLeaner():
             logits_list = []
             losses = []
 
-            for i, (audio, label) in enumerate(valid_dataloader):
+            for i, (path, audio, label) in enumerate(valid_dataloader):
                 label = label.to(self.device)
                 if eval_type != 'maj_vote':
                     loss, preds, _ = self._eval(audio, label, criterion)
@@ -276,4 +296,105 @@ class CIdeRLeaner():
         torch.save(model.state_dict(), path)
         with open(os.path.join(save_dir, 'config.txt'), 'w') as f:
             f.write(str(model))
+
+    def load_model(
+        self,
+        model_path: str=None,
+    ):
+        # Check the model file exists
+        if not os.path.isfile(model_path):
+            raise ValueError(f"The model file `{model_path}` is not exists or broken! ")
+
+        self.model.load_state_dict(torch.load(model_path))
     
+    def batch_inference(
+        self,
+        input: Union[str, DataFrame],
+        save_dir: str='./output', 
+        file_name: str='output.csv'
+    ):
+        self.model.eval()
+        
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        if isinstance(input, DataFrame):
+            input.to_csv(os.path.join(save_dir, 'inference.csv'), encoding='utf-8', index=False)
+        else:
+            # Check the model file exists
+            if not os.path.isfile(input):
+                raise ValueError(f"The input file `{input}` is not exists or broken! ")
+            
+            dsc = os.path.join(save_dir, 'inference.csv')
+            copyfile(input, dsc)
+
+        cfg = load_json(file='./configs/params.json')
+
+        test_transform = transforms.Compose([
+            ToFloatTensor(),
+            # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        ])
+        # TO DO: Create dataset
+        test_dataset = AICovidVNDataset(
+            root=save_dir,
+            mode='inference',
+            transform=test_transform,
+            eval_type=cfg['eval_type'],
+            window_size=cfg['window_size'],
+            sample_rate=cfg['sample_rate'],
+            n_fft=cfg['n_fft'],
+            breathcough=cfg['breathcough']
+        )
+
+        test_dataloader = DataLoader(
+            test_dataset,
+            batch_size=cfg['batch_size'] if cfg['eval_type'] != 'maj_vote' else 1,
+            shuffle=False,
+            num_workers=cfg['num_workers']
+        )
+
+        with torch.no_grad():
+            paths = []
+            assessment_results = []
+            for (path, audio, label) in tqdm(test_dataloader):
+                if cfg['eval_type'] != 'maj_vote':
+                    _, preds, logits = self._eval(audio=audio, label=label)
+                else:
+                    clips = audio
+                    clip_preds = []
+                    for audio in clips:
+                        _, preds, logits = self._eval(audio=audio, label=label)
+                        clip_preds.append((preds, logits))
+
+                    # TODO: Aggregate predicts and loss
+                    positive = np.count_nonzero([c[0] for c in clip_preds])
+                    votes = {'1': positive, '0': len(clip_preds) - positive}
+
+                    # If its a tie, use logits
+                    if votes['1'] == votes['0']:
+                        logits = (
+                            sum([c[1] for c in clip_preds if c[0].item() == 0]), # Negative
+                            sum([c[1] for c in clip_preds if c[0].item() == 1]), # Positive
+                        )
+                        preds = np.argmax(logits).reshape(1, 1)
+                    else:
+                        preds = np.array(int(max(votes.items(), key=lambda x: x[1])[0])).reshape(1, 1)
+                    
+                average_logits = [c[1][0][0] for c in clip_preds]
+                logits = np.mean(average_logits)
+                
+                paths.append(path[0])
+                assessment_results.append(logits)
+
+        # TODO: Get uuid
+        uuids = [path.split('/')[-1].split('.')[0] for path in paths]
+
+        outdf = pd.DataFrame({
+            'path': paths,
+            'uuid': uuids,
+            'assessment_result': assessment_results
+        })
+        
+        outdf.to_csv(os.path.join(save_dir, file_name), encoding='utf-8', index=False)
+        
+        return outdf
